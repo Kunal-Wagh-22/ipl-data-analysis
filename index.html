@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beyond the Scoreboard: A Multi-Dimensional Analysis of IPL Match Dynamics</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Styling -->
+  <style>
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f8fafc;
+      --card: #ffffff;
+      --card-border: #e2e8f0;
+      --muted: #64748b;
+      --text: #1e293b;
+      --text-secondary: #475569;
+      --bat: #dc2626;
+      --bowl: #0891b2;
+      --win: #059669;
+      --lose: #2563eb;
+      --accent: #f97316;
+      --card-bg: #f8fafc;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--bg-secondary);
+      color: var(--text);
+    }
+
+    svg {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+
+
+    #map {
+      grid-row: 1 / 3;
+      grid-column: 1;
+      background: var(--card) !important;
+      border-radius: 12px;
+    }
+
+    #donut,
+    #phase {
+      background: var(--card) !important;
+      border-radius: 12px;
+    }
+
+    #tooltip {
+      position: absolute;
+      background: rgba(30, 41, 59, 0.95);
+      color: #ffffff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+    }
+
+    .tooltip b {
+      color: var(--accent);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .axis path,
+    .axis line {
+      stroke: var(--card-border);
+      stroke-width: 1;
+    }
+
+    .axis text {
+      fill: var(--muted);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .india-map {
+      fill: #f1f5f9;
+      stroke: #cbd5e1;
+      stroke-width: 0.5;
+    }
+
+    @media (max-width: 1200px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-cards {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .stats-cards {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- HEADER -->
+  <div
+    class="fixed top-0 left-0 right-0 bg-gradient-to-b from-white/100 to-white/95 px-4 py-2 text-slate-800 font-semibold text-lg z-50 border-b border-slate-200 backdrop-blur-md shadow-sm">
+    Beyond the Scoreboard: A Multi-Dimensional Analysis of IPL Match Dynamics
+  </div>
+
+  <!-- MAIN CONTAINER -->
+  <div
+    class="flex flex-col items-center w-full max-w-[1600px] mx-auto px-4 pt-24 pb-20 bg-slate-50 text-slate-800 font-sans">
+
+    <!-- STATS CARDS -->
+    <div class="grid grid-cols-4 gap-4 w-full mb-6 max-lg:grid-cols-2 max-md:grid-cols-1">
+      <div
+        class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-lg hover:border-slate-300 transition">
+        <div class="uppercase text-xs font-semibold tracking-wide text-slate-500">Total Matches</div>
+        <div class="text-2xl font-bold mt-2" id="totalMatchesCard">-</div>
+        <p class="text-sm text-slate-500">Matches played with current filters</p>
+      </div>
+
+      <div
+        class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-lg hover:border-slate-300 transition">
+        <div class="uppercase text-xs font-semibold tracking-wide text-slate-500">Batting First Wins</div>
+        <div class="text-2xl font-bold mt-2" id="batFirstWinsCard">-</div>
+        <p class="text-sm text-slate-500">Wins by teams batting first</p>
+      </div>
+
+      <div
+        class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-lg hover:border-slate-300 transition">
+        <div class="uppercase text-xs font-semibold tracking-wide text-slate-500">Bowling First Wins</div>
+        <div class="text-2xl font-bold mt-2" id="bowlFirstWinsCard">-</div>
+        <p class="text-sm text-slate-500">Wins by teams bowling first</p>
+      </div>
+
+      <div
+        class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-lg hover:border-slate-300 transition">
+        <div class="uppercase text-xs font-semibold tracking-wide text-slate-500">Average Run Rate</div>
+        <div class="text-2xl font-bold mt-2" id="avgRunRateCard">-</div>
+        <p class="text-sm text-slate-500">Average runs per over</p>
+      </div>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm w-full">
+      <div class="font-bold text-sm uppercase tracking-wide text-slate-700 mb-4 flex items-center gap-2">Filters</div>
+
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Year</label>
+          <select id="yearFilter"
+            class="px-3 py-2 border border-slate-200 rounded-md bg-white text-sm font-medium text-slate-800 hover:border-slate-300 hover:bg-slate-50 transition cursor-pointer">
+            <option value="">All Years</option>
+            <!-- Year options -->
+            <script>
+              for (let y = 2008; y <= 2025; y++) {
+                document.write(`<option value="${y}">${y}</option>`);
+              }
+            </script>
+          </select>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Team</label>
+          <select id="teamFilter"
+            class="px-3 py-2 border border-slate-200 rounded-md bg-white text-sm font-medium text-slate-800 hover:border-slate-300 hover:bg-slate-50 transition cursor-pointer">
+            <option value="">All Teams</option>
+          </select>
+        </div>
+
+        <div class="flex flex-col justify-end">
+          <button id="resetFilter"
+            class="bg-slate-500 text-white text-xs font-semibold uppercase tracking-wide rounded-md py-2 px-4 hover:bg-slate-600 transition">
+            Reset Filters
+          </button>
+        </div>
+
+        <div class="flex flex-col justify-end">
+          <button id="resetDashboard"
+            class="bg-red-600 text-white text-xs font-semibold uppercase tracking-wide rounded-md py-2 px-4 hover:bg-red-700 transition">
+            Reset Dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD GRID -->
+    <div class="grid grid-cols-[1.5fr_1fr] gap-4 w-full mt-8 max-lg:grid-cols-1">
+      <svg id="map" class="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-lg transition p-5"></svg>
+      <svg id="donut" class="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-lg transition"></svg>
+      <svg id="phase" class="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-lg transition"></svg>
+    </div>
+
+    <!-- LINECHART + STADIUM SUMMARY -->
+    <div
+      class="grid grid-cols-[1fr_320px] gap-5 w-full bg-white border border-slate-200 rounded-xl p-5 shadow-sm mt-5 max-lg:grid-cols-1">
+      <svg id="linechart" class="w-full"></svg>
+      <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col gap-3">
+        <div class="font-bold text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200 pb-2">Stadium
+          Details</div>
+        <div class="flex justify-between items-center text-sm border-b border-slate-100 py-1">
+          <span class="text-slate-600">Name</span><span id="stadiumName" class="font-bold text-slate-800">-</span>
+        </div>
+        <div class="flex justify-between items-center text-sm border-b border-slate-100 py-1">
+          <span class="text-slate-600">State</span><span id="stadiumState" class="font-bold text-slate-800">-</span>
+        </div>
+        <div class="flex justify-between items-center text-sm border-b border-slate-100 py-1">
+          <span class="text-slate-600">Total Matches</span><span id="totalMatches"
+            class="font-bold text-slate-800">-</span>
+        </div>
+        <div class="flex justify-between items-center text-sm border-b border-slate-100 py-1">
+          <span class="text-slate-600">Bat 1st Wins</span>
+          <span id="batFirstWins" class="bg-red-100 text-red-600 text-xs font-semibold rounded px-2 py-0.5">-</span>
+        </div>
+        <div class="flex justify-between items-center text-sm border-b border-slate-100 py-1">
+          <span class="text-slate-600">Bat 2nd Wins</span>
+          <span id="batSecondWins" class="bg-cyan-100 text-cyan-600 text-xs font-semibold rounded px-2 py-0.5">-</span>
+        </div>
+        <div class="flex justify-between items-center text-sm">
+          <span class="text-slate-600">Winning Bias%</span><span id="winningPercentage"
+            class="font-bold text-slate-800">-</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOOLTIP -->
+  <div id="tooltip" class=""></div>
+
+  <!-- FOOTER -->
+  <footer class="w-full mt-6 border-t border-slate-200 bg-slate-50 py-4 text-center text-sm text-slate-600">
+    The data sources are taken from
+    <span class="font-medium text-slate-700">CricSheet</span>, which can be downloaded from this link:
+    <a href="https://cricsheet.org/downloads/ipl_json.zip" target="_blank"
+      class="text-blue-600 hover:text-blue-800 hover:underline transition-colors duration-200">
+      IPL JSON Dataset
+    </a>
+  </footer>
+
+
+  <script>
+    // Select SVG containers and tooltip for the dashboard
+    const mapSvg = d3.select("#map"),
+      donutSvg = d3.select("#donut"),
+      phaseSvg = d3.select("#phase"),
+      tooltip = d3.select("#tooltip");
+
+    // arrays for the required calculations
+    let allMatches = [];
+    let allStadiums = [];
+    let currentFilters = { year: '', team: '' };
+    let selectedVenue = null;
+    let venueStats = {};
+    let phaseData = {};
+
+    // Fitting the maps and graphs with responsiveness
+    const mapWidth = window.innerWidth * 0.55,
+      mapHeight = window.innerHeight * 0.9;
+    const donutWidth = window.innerWidth * 0.35,
+      donutHeight = window.innerHeight * 0.4;
+    const phaseWidth = window.innerWidth * 0.35,
+      phaseHeight = window.innerHeight * 0.45;
+
+    // Apply dimensions to SVG containers
+    mapSvg.attr("width", mapWidth).attr("height", mapHeight);
+    donutSvg.attr("width", donutWidth).attr("height", donutHeight);
+    phaseSvg.attr("width", phaseWidth).attr("height", phaseHeight);
+
+    // The map projection is based on Indian map  we used mercator for projection the centered on India
+    const projection = d3.geoMercator()
+      .center([78, 22])
+      .scale(900)
+      .translate([mapWidth / 2, mapHeight / 1.8]);
+    const path = d3.geoPath().projection(projection);
+
+    // Loading data files to initialize the dashboard page
+    Promise.all([
+      d3.json("india-geo.json"),
+      d3.json("stadium_statistics_with_coords.json"),
+      d3.json("combined_normalized.json"),
+    ]).then(([india, stadiums, matches]) => {
+      allMatches = matches;
+      allStadiums = stadiums;
+
+      // From the json the teams were extracted and then set the unique ones with no duplicates for dropdown
+      const teams = [...new Set(matches.flatMap(m => m.data.innings?.map(i => i.team) || []))].sort();
+      document.getElementById('teamFilter').innerHTML += teams.map(t => `<option value="${t}">${t}</option>`).join('');
+
+      // Event listeners for filters so that can change the dashboard metrics 
+      document.getElementById('yearFilter').addEventListener('change', applyFilters);
+      document.getElementById('teamFilter').addEventListener('change', applyFilters);
+      document.getElementById('resetFilter').addEventListener('click', resetFilters);
+      document.getElementById('resetDashboard').addEventListener('click', resetDashboard);
+
+      // Functions for calculating the required statistics on the dashboard 
+      computeVenueAndPhase();
+      initializeCharts(india, stadiums);
+      updateDashboard(allMatches);
+    });
+
+    //*****FUNCTIONS FOR DATA PROCESSING*******
+    /**
+     * Calculate win statistics by venue and batting/bowling performance by phase
+     
+     */
+    function computeVenueAndPhase() {
+      venueStats = {};
+      phaseData = {};
+
+      allMatches.forEach(m => {
+        const info = m.data.info;
+        if (!info || !info.venue) return;
+
+        const venue = info.venue;
+
+        // Initialize venue stats if the venue is selected for the first time 
+        if (!venueStats[venue]) venueStats[venue] = { batFirst: 0, batSecond: 0, total: 0 };
+        venueStats[venue].total++;
+
+        // Count wins by batting first vs batting second
+        if (info.outcome && info.outcome.by) {
+          if ("wickets" in info.outcome.by) venueStats[venue].batSecond++;
+          else if ("runs" in info.outcome.by) venueStats[venue].batFirst++;
+        }
+
+        // Set up phase data structure for winners vs losers
+        if (!phaseData[venue]) phaseData[venue] = { Winner: {}, Loser: {} };
+        const winner = info.outcome?.winner;
+        if (!winner) return;
+
+        // Calculate the performances for phases Powerplay, Middle Overs and Death overs
+        m.data.innings.forEach(inn => {
+          const group = inn.team === winner ? "Winner" : "Loser";
+          const stats = { Powerplay: { r: 0, b: 0 }, Middle: { r: 0, b: 0 }, Death: { r: 0, b: 0 } };
+
+          // Add runs and balls faced in each phase
+          inn.overs.forEach(o => o.deliveries.forEach(d => {
+            const over = o.over;
+            const phase = over < 6 ? "Powerplay" : over < 16 ? "Middle" : "Death";
+            stats[phase].r += d.runs?.total || 0;
+            stats[phase].b++;
+          }));
+
+          // Updates the phase calculations for this venue
+          for (const phase in stats) {
+            if (!phaseData[venue][group][phase]) phaseData[venue][group][phase] = { r: 0, b: 0, c: 0 };
+            const p = stats[phase];
+            phaseData[venue][group][phase].r += p.r;
+            phaseData[venue][group][phase].b += p.b;
+            phaseData[venue][group][phase].c++;
+          }
+        });
+      });
+    }
+
+
+    /**
+     * This function will filter based on the selections made by user 
+     * The additional condition is the code will not filter year data for line chart 
+     * as it requires data of all the years available 
+     * This will return filtered match data array
+     * */
+    function filterMatches(forLineChart = false) {
+      return allMatches.filter(m => {
+        const info = m.data.info;
+        const matchYear = +info.dates?.[0].slice(0, 4);
+
+        // Skip year filter for line chart to show full trends
+        if (!forLineChart && currentFilters.year && matchYear !== +currentFilters.year) return false;
+
+        // Filter by selected venue if any
+        if (selectedVenue && info.venue !== selectedVenue) return false;
+
+        // Filter by team if selected
+        if (currentFilters.team) {
+          const teams = m.data.innings?.map(i => i.team) || [];
+          if (!teams.includes(currentFilters.team)) return false;
+        }
+        return true;
+      });
+    }
+
+
+    //Apply current filter selections and update all dashboard components
+
+    function applyFilters() {
+      currentFilters.year = document.getElementById('yearFilter').value;
+      currentFilters.team = document.getElementById('teamFilter').value;
+      updateDashboard(filterMatches());
+    }
+
+
+    //Refresh all dashboard visualizations with filtered data
+
+    function updateDashboard(filtered) {
+      computeVenueAndPhase();
+      // Update summary charts
+      updateStatsCards(filtered);
+      const { batFirst, batSecond } = aggregate(filtered);
+      updateDonut({ batFirst, batSecond }, selectedVenue || "All Venues");
+      const phAgg = aggregatePhase(filtered);
+      updatePhaseChart(phAgg, selectedVenue || "All Venues");
+
+      // For line chart year is ignored as all years data are required
+      const lineData = allMatches.filter(m => {
+        const info = m.data.info;
+        if (!info) return false;
+
+        // Apply venue filter (if any)
+        if (selectedVenue && info.venue !== selectedVenue) return false;
+
+        // Apply team filter (if any)
+        if (currentFilters.team) {
+          const teams = m.data.innings?.map(i => i.team) || [];
+          if (!teams.includes(currentFilters.team)) return false;
+        }
+
+        return true;
+      });
+
+      // Update line chart with full trend data
+      updateLine(lineData, selectedVenue || "All Venues");
+
+      // Recolor map points based on filtered data
+      recolorMap(filtered);
+    }
+
+    //This function will update venue colors based on their batting or bowling win comparisons
+    function recolorMap(filtered) {
+      if (!allStadiums.length || !venueStats) return;
+
+      // Calculate batting/bowling bias for filtered matches
+      const filteredVenues = d3.rollups(
+        filtered,
+        v => ({
+          batFirst: d3.sum(v, m => {
+            const o = m.data.info?.outcome?.by;
+            return o && "runs" in o ? 1 : 0;
+          }),
+          batSecond: d3.sum(v, m => {
+            const o = m.data.info?.outcome?.by;
+            return o && "wickets" in o ? 1 : 0;
+          }),
+          total: v.length
+        }),
+        m => m.data.info?.venue
+      );
+      const filteredMap = new Map(filteredVenues);
+
+      // Update map point colors and highlighting
+      d3.select("#map").selectAll("circle")
+        .transition().duration(300)
+        .attr("fill", d => {
+          const v = venueStats[d["name of stadium"]];
+          if (!v || !v.total) return "#e2e8f0";
+          return v.batFirst / v.total > 0.5 ? "var(--bat)" : "var(--bowl)";
+        })
+        .attr("opacity", d => {
+          if (!selectedVenue) return 1;
+          return d["name of stadium"] === selectedVenue ? 1 : 0.4;
+        })
+        .attr("stroke", d =>
+          d["name of stadium"] === selectedVenue ? "#f59e0b" : "#fff"
+        )
+        .attr("stroke-width", d =>
+          d["name of stadium"] === selectedVenue ? 3 : 1.4
+        );
+    }
+
+
+    //Aggregate wins by batting first vs batting second
+
+    function aggregate(data) {
+      const res = { batFirst: 0, batSecond: 0 };
+      data.forEach(m => {
+        const o = m.data.info?.outcome?.by;
+        if (!o) return;
+        if ("runs" in o) res.batFirst++;
+        else if ("wickets" in o) res.batSecond++;
+      });
+      return res;
+    }
+
+    // Aggregate batting performance by match phase for winners and losers
+    function aggregatePhase(data) {
+      const out = { Winner: {}, Loser: {} };
+      data.forEach(m => {
+        const info = m.data.info;
+        if (!info?.venue) return;
+        const winner = info.outcome?.winner;
+        if (!winner) return;
+
+        // Analyze each innings in the match
+        m.data.innings.forEach(inn => {
+          const group = inn.team === winner ? "Winner" : "Loser";
+          const stats = { Powerplay: { r: 0, b: 0 }, Middle: { r: 0, b: 0 }, Death: { r: 0, b: 0 } };
+
+          // Tally runs and balls in each phase
+          inn.overs.forEach(o => o.deliveries.forEach(d => {
+            const over = o.over;
+            const phase = over < 6 ? "Powerplay" : over < 16 ? "Middle" : "Death";
+            stats[phase].r += d.runs?.total || 0;
+            stats[phase].b++;
+          }));
+
+          // Update aggregate phase statistics
+          for (const phase in stats) {
+            if (!out[group][phase]) out[group][phase] = { r: 0, b: 0, c: 0 };
+            const p = stats[phase];
+            out[group][phase].r += p.r;
+            out[group][phase].b += p.b;
+            out[group][phase].c++;
+          }
+        });
+      });
+      return out;
+    }
+
+    //***MAP INITIALIZATION****
+
+    /**
+     * Initialize the map with India geography and stadium locations
+    Parameters are geojson data and stadium data 
+     */
+    function initializeCharts(india, stadiums) {
+      // Add map title
+      mapSvg.append("text")
+        .attr("x", mapWidth / 2)
+        .attr("y", 28)
+        .attr("text-anchor", "middle")
+        .style("font-weight", "800")
+        .style("font-size", "16px")
+        .style("fill", "#1e293b")
+        .style("letter-spacing", "0.4px")
+        .text("IPL Stadium Locations");
+
+      // Draw India map outline
+      mapSvg.selectAll("path")
+        .data(india.features)
+        .join("path")
+        .attr("d", path)
+        .attr("fill", "#f1f5f9")
+        .attr("stroke", "#cbd5e1")
+        .attr("stroke-width", 0.8);
+
+      // Filter stadiums with valid coordinates
+      const valid = stadiums.filter(d => d.latitude && d.longitude);
+
+      // Create interactive stadium points on map
+      const circles = mapSvg.selectAll("circle")
+        .data(valid)
+        .join("circle")
+        .attr("cx", d => projection([d.longitude, d.latitude])[0])
+        .attr("cy", d => projection([d.longitude, d.latitude])[1])
+        .attr("r", 6)
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1.4)
+        .attr("fill", d => {
+          const v = venueStats[d["name of stadium"]] || { batFirst: 0, batSecond: 0, total: 1 };
+          return v.batFirst / v.total > 0.5 ? "var(--bat)" : "var(--bowl)";
+        })
+        .style("cursor", "pointer")
+        .on("mouseover", (e, d) => {
+      // Show stadium statistics on hover
+          const stats = venueStats[d["name of stadium"]] || { batFirst: 0, batSecond: 0, total: 0 };
+          const total = stats.total || 1;
+          const batPct = ((stats.batFirst / total) * 100).toFixed(1);
+          const bowlPct = ((stats.batSecond / total) * 100).toFixed(1);
+
+          tooltip.transition().duration(200).style("opacity", 1);
+          tooltip.html(`
+        <b>${d["name of stadium"]}</b>
+        <div>${d.city}, ${d.state}</div>
+        <hr style="border:none; border-top:1px solid rgba(255,255,255,0.15); margin:6px 0;">
+        <div>Bat 1st Wins: ${stats.batFirst} (${batPct}%)</div>
+        <div>Bat 2nd Wins: ${stats.batSecond} (${bowlPct}%)</div>
+        <div>Total Matches: ${stats.total}</div>
+      `)
+            .style("left", e.pageX + 12 + "px")
+            .style("top", e.pageY - 28 + "px");
+
+          d3.select(e.currentTarget)
+            .transition().duration(150)
+            .attr("r", 9);
+        })
+        .on("mouseout", (e) => {
+          d3.select(e.currentTarget)
+            .transition().duration(150)
+            .attr("r", 6);
+          tooltip.transition().duration(300).style("opacity", 0);
+        })
+        .on("click", (e, d) => {
+          selectedVenue = d["name of stadium"];
+          updateDashboard(filterMatches());
+          updateStadiumCard(d);
+        });
+
+      const labelPadding = 12;
+
+      // Split stadiums by longitude for balanced label placement
+      const eastLabels = valid.filter(d => d.longitude > 80);
+      const westLabels = valid.filter(d => d.longitude <= 80);
+
+      function placeLabels(labelData, side = "right") {
+        const labels = mapSvg.selectAll(`.stadium-label-group-${side}`)
+          .data(labelData)
+          .join("g")
+          .attr("class", `stadium-label-group-${side}`)
+          .attr("transform", d => {
+            const [x, y] = projection([d.longitude, d.latitude]);
+            const offset = side === "right" ? labelPadding : -labelPadding;
+            return `translate(${x + offset}, ${y})`;
+          });
+
+        labels.append("line")
+          .attr("x1", side === "right" ? -5 : 5)
+          .attr("x2", side === "right" ? -labelPadding : labelPadding)
+          .attr("y1", 0)
+          .attr("y2", 0)
+          .attr("stroke", "#94a3b8")
+          .attr("stroke-width", 0.8)
+          .attr("opacity", 0.6);
+
+        // Add stadium name text
+        labels.append("text")
+          .attr("text-anchor", side === "right" ? "start" : "end")
+          .attr("dx", side === "right" ? 6 : -6)
+          .attr("dy", 4)
+          .style("font-size", "11px")
+          .style("font-weight", "600")
+          .style("fill", "#334155")
+          .style("pointer-events", "none")
+          .text(d => d["name of stadium"]);
+
+        const labelNodes = labels.nodes().map((n, i) => {
+          const [x, y] = projection([labelData[i].longitude, labelData[i].latitude]);
+          return { node: n, y, data: labelData[i] };
+        }).sort((a, b) => a.y - b.y);
+
+        const spacing = 14;
+
+        for (let i = 1; i < labelNodes.length; i++) {
+          const prev = labelNodes[i - 1];
+          const curr = labelNodes[i];
+          if (curr.y - prev.y < spacing) {
+            const diff = spacing - (curr.y - prev.y);
+            curr.y += diff;
+          }
+        }
+
+        // Apply adjusted positions
+        labelNodes.forEach(l => {
+          const [x] = projection([l.data.longitude, l.data.latitude]);
+          const offset = side === "right" ? labelPadding : -labelPadding;
+          d3.select(l.node).attr("transform", `translate(${x + offset}, ${l.y})`);
+        });
+      }
+
+      placeLabels(eastLabels, "right");
+      placeLabels(westLabels, "left");
+
+      // Add map legend explaining point colors
+      const legendData = [
+        { label: "Bat First Favoured Stadium", color: "var(--bat)" },
+        { label: "Bowl First Favoured Stadium", color: "var(--bowl)" }
+      ];
+
+      const legendGroup = mapSvg.append("g")
+        .attr("class", "map-legend")
+        .attr("transform", `translate(${mapWidth / 2 - 160}, ${mapHeight - 30})`);
+
+      legendGroup.selectAll("rect")
+        .data(legendData)
+        .join("rect")
+        .attr("x", (d, i) => i * 200)
+        .attr("width", 14)
+        .attr("height", 14)
+        .attr("rx", 3)
+        .attr("fill", d => d.color);
+
+      legendGroup.selectAll("text")
+        .data(legendData)
+        .join("text")
+        .attr("x", (d, i) => i * 200 + 22)
+        .attr("y", 11)
+        .style("font-size", "12px")
+        .style("font-weight", "600")
+        .style("fill", "#475569")
+        .text(d => d.label);
+    }
+
+    // DASHBOARD UPDDATING FUNCTIONS 
+
+    function updateStatsCards(data) {
+      const total = data.length;
+      const { batFirst, batSecond } = aggregate(data);
+      const avgRunRate = calcRunRate(data);
+
+      document.getElementById("totalMatchesCard").textContent = total;
+      document.getElementById("batFirstWinsCard").textContent = batFirst;
+      document.getElementById("bowlFirstWinsCard").textContent = batSecond;
+      document.getElementById("avgRunRateCard").textContent = avgRunRate;
+
+    }
+
+    /**
+     * Calculate average run rate from match data this uses matches data and returns formatted
+     * average run rate
+     */
+    function calcRunRate(data) {
+      let runs = 0, balls = 0;
+      data.forEach(m =>
+        m.data.innings?.forEach(i =>
+          i.overs?.forEach(o =>
+            o.deliveries?.forEach(d => {
+              runs += d.runs?.total || 0;
+              balls++;
+            })
+          )
+        )
+      );
+      return balls ? (runs / (balls / 6)).toFixed(2) : "0.00";
+    }
+
+    // This will reset all filters so that all the data is shown
+    function resetFilters() {
+      currentFilters = { year: '', team: '' };
+      document.getElementById('yearFilter').value = "";
+      document.getElementById('teamFilter').value = "";
+      updateDashboard(allMatches);
+    }
+
+    // Reset entire dashboard to initial state
+
+    function resetDashboard() {
+      selectedVenue = null;
+      resetFilters();
+      document.getElementById("stadiumName").textContent = "-";
+      document.getElementById("stadiumState").textContent = "-";
+      document.getElementById("totalMatches").textContent = "-";
+      document.getElementById("batFirstWins").textContent = "-";
+      document.getElementById("batSecondWins").textContent = "-";
+      document.getElementById("winningPercentage").textContent = "-";
+    }
+
+    //*******DONUT CHART *********
+    /**
+    Update the donut chart to show how many matches were won by teams batting first 
+    and batting second for the selected venue.
+     */
+    function updateDonut(data, venue) {
+      donutSvg.selectAll("*").remove();
+
+      const width = donutWidth, height = donutHeight, radius = Math.min(width, height) / 2;
+      const g = donutSvg.append("g").attr("transform", `translate(${width / 2},${height / 1.9})`);
+
+      const color = d3.scaleOrdinal()
+        .domain(["Bat First Wins", "Bowl First Wins"])
+        .range(["var(--bat)", "var(--bowl)"]);
+
+      const pie = d3.pie().value(d => d[1]).sort(null);
+      const dataReady = Object.entries({
+        "Bat First Wins": data.batFirst,
+        "Bowl First Wins": data.batSecond
+      });
+      const total = data.batFirst + data.batSecond;
+      const arc = d3.arc().innerRadius(radius * 0.6).outerRadius(radius * 0.9);
+
+      const arcs = g.selectAll("path")
+        .data(pie(dataReady))
+        .join("path")
+        .attr("fill", d => color(d.data[0]))
+        .attr("stroke", "#fff")
+        .attr("stroke-width", "2px")
+        .style("cursor", "pointer")
+        .on("mouseover", (e, d) => {
+          const pct = ((d.data[1] / total) * 100).toFixed(1);
+          tooltip.transition().duration(150).style("opacity", 1);
+          tooltip.html(`<b>${d.data[0]}</b><br>Wins: ${d.data[1]}<br>Share: ${pct}%`)
+            .style("left", e.pageX + 10 + "px")
+            .style("top", e.pageY - 28 + "px");
+        })
+        .on("mouseout", () => tooltip.transition().duration(200).style("opacity", 0))
+        .transition().duration(700)
+        .attrTween("d", function (d) {
+          const i = d3.interpolate({ startAngle: 0, endAngle: 0 }, d);
+          return t => arc(i(t));
+        });
+
+      // Add percentage labels on slices
+      g.selectAll(".label")
+        .data(pie(dataReady))
+        .join("text")
+        .attr("class", "label")
+        .attr("transform", d => `translate(${arc.centroid(d)})`)
+        .attr("dy", "0.35em")
+        .style("text-anchor", "middle")
+        .style("font-size", "13px")
+        .style("font-weight", "700")
+        .style("fill", "#ffffff")
+        .text(d => `${((d.data[1] / total) * 100).toFixed(1)}%`);
+
+      // Center label showing venue name
+      const centerText = g.append("text")
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "middle")
+        .style("font-size", venue.length > 18 ? "11px" : "13px")
+        .style("font-weight", "700")
+        .style("fill", "#334155")
+        .text(venue);
+
+      // Chart title
+      donutSvg.append("text")
+        .attr("x", width / 2)
+        .attr("y", 15)
+        .attr("text-anchor", "middle")
+        .style("font-weight", "700")
+        .style("font-size", "14px")
+        .style("fill", "#475569")
+        .text("Bat vs Bowl Wins");
+
+      // Legend below chart
+      const legend = donutSvg.append("g")
+        .attr("transform", `translate(${width / 2 - 100}, ${height - 0})`);
+
+      const legendData = ["Bat First Wins", "Bowl First Wins"];
+      legend.selectAll("rect")
+        .data(legendData)
+        .join("rect")
+        .attr("x", (d, i) => i * 110)
+        .attr("width", 14)
+        .attr("height", 14)
+        .attr("rx", 3)
+        .attr("fill", d => color(d));
+
+      legend.selectAll("text")
+        .data(legendData)
+        .join("text")
+        .attr("x", (d, i) => i * 110 + 20)
+        .attr("y", 11)
+        .style("fill", "#475569")
+        .style("font-size", "12px")
+        .style("font-weight", "600")
+        .text(d => d);
+    }
+
+    //******PHASE CHART********
+
+    /**
+    Updates the phase chart to display batting performance across different match 
+    phases (Powerplay, Middle, and Death) for the selected venue.
+     */
+    function updatePhaseChart(phaseAgg, venue) {
+      phaseSvg.selectAll("*").remove();
+
+      const width = phaseWidth - 60,
+        height = phaseHeight - 80,
+        margin = { top: 60, right: 60, bottom: 50, left: 60 };
+
+      const svgG = phaseSvg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const phases = ["Powerplay", "Middle", "Death"];
+      const groups = ["Winner", "Loser"];
+
+      const phaseData = [];
+      groups.forEach(g => {
+        phases.forEach(p => {
+          const val = phaseAgg[g][p];
+          const avgRuns = val && val.c ? val.r / val.c : 0;
+          const runRate = val && val.b ? val.r / (val.b / 6) : 0;
+          phaseData.push({ group: g, phase: p, avgRuns, runRate });
+        });
+      });
+
+      const x0 = d3.scaleBand().domain(phases).range([0, width]).padding(0.4);
+      const x1 = d3.scaleBand().domain(groups).range([0, x0.bandwidth()]).padding(0.05);
+      const yLeft = d3.scaleLinear().domain([0, d3.max(phaseData, d => d.avgRuns) * 1.2]).range([height, 0]);
+      const yRight = d3.scaleLinear().domain([0, d3.max(phaseData, d => d.runRate) * 1.2]).range([height, 0]);
+
+      const tooltip = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("position", "absolute")
+        .style("padding", "6px 10px")
+        .style("background", "rgba(30,41,59,0.9)")
+        .style("color", "#fff")
+        .style("border-radius", "6px")
+        .style("font-size", "12px")
+        .style("pointer-events", "none")
+        .style("opacity", 0);
+
+      // Axes
+      svgG.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x0))
+        .selectAll("text")
+        .style("font-size", "11px")
+        .style("font-weight", "600");
+
+      svgG.append("g").call(d3.axisLeft(yLeft).ticks(5));
+      svgG.append("g")
+        .attr("transform", `translate(${width},0)`)
+        .call(d3.axisRight(yRight).ticks(5));
+
+      // Bars
+      const bars = svgG.selectAll(".bar")
+        .data(phaseData)
+        .join("rect")
+        .attr("class", "bar")
+        .attr("x", d => x0(d.phase) + x1(d.group))
+        .attr("width", x1.bandwidth())
+        .attr("y", height)
+        .attr("height", 0)
+        .attr("fill", d => d.group === "Winner" ? "var(--win)" : "var(--lose)")
+        .attr("rx", 2)
+        .style("opacity", 0.9)
+        .on("mouseover", (event, d) => {
+          tooltip.style("opacity", 1)
+            .html(`<strong>${d.group}</strong><br/>Phase: ${d.phase}<br/>Avg Runs: ${d.avgRuns.toFixed(2)}<br/>Run Rate: ${d.runRate.toFixed(2)}`);
+        })
+        .on("mousemove", (event) => {
+          tooltip.style("left", (event.pageX + 12) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseleave", () => tooltip.style("opacity", 0));
+
+      anime({
+        targets: bars.nodes(),
+        duration: 500,
+        delay: anime.stagger(1),
+        easing: "easeOutElastic(1, .0)",
+        update: anim => {
+          bars.nodes().forEach((node, i) => {
+            const d = phaseData[i];
+            const progress = anim.progress / 100;
+            const yTarget = yLeft(d.avgRuns);
+            const hTarget = height - yLeft(d.avgRuns);
+            const currentY = height - hTarget * progress;
+            const currentH = hTarget * progress;
+            node.setAttribute("y", currentY);
+            node.setAttribute("height", currentH);
+          });
+        }
+      });
+
+      // Labels
+      const labels = svgG.selectAll(".bar-label")
+        .data(phaseData)
+        .join("text")
+        .attr("class", "bar-label")
+        .attr("x", d => x0(d.phase) + x1(d.group) + x1.bandwidth() / 2)
+        .attr("y", height)
+        .attr("text-anchor", "middle")
+        .style("font-size", "11px")
+        .style("font-weight", "600")
+        .style("fill", d => d.group === "Winner" ? "var(--win)" : "var(--lose)")
+        .text(d => d.avgRuns > 0 ? d.avgRuns.toFixed(1) : "");
+
+      anime({
+        targets: labels.nodes(),
+        duration: 1000,
+        delay: anime.stagger(80),
+        easing: "easeOutExpo",
+        update: anim => {
+          labels.nodes().forEach((node, i) => {
+            const d = phaseData[i];
+            const progress = anim.progress / 100;
+            const yTarget = yLeft(d.avgRuns) - 6;
+            const currentY = height - (height - yTarget) * progress;
+            node.setAttribute("y", currentY);
+          });
+        }
+      });
+
+      const line = d3.line()
+        .x(d => x0(d.phase) + x0.bandwidth() / 2)
+        .y(d => yRight(d.runRate))
+        .curve(d3.curveMonotoneX);
+
+      groups.forEach(g => {
+        const groupData = phaseData.filter(d => d.group === g);
+        const path = svgG.append("path")
+          .datum(groupData)
+          .attr("fill", "none")
+          .attr("stroke", g === "Winner" ? "var(--win)" : "var(--lose)")
+          .attr("stroke-width", 2.5)
+          .attr("stroke-dasharray", "4,3")
+          .attr("d", line)
+          .style("opacity", 0.9);
+
+        const pathLength = path.node().getTotalLength();
+        path.attr("stroke-dasharray", pathLength)
+          .attr("stroke-dashoffset", pathLength);
+        anime({
+          targets: path.node(),
+          strokeDashoffset: [pathLength, 0],
+          easing: "easeOutSine",
+          duration: 1300,
+          delay: 300
+        });
+
+        // Dots
+        const dots = svgG.selectAll(`.dot-${g}`)
+          .data(groupData)
+          .join("circle")
+          .attr("class", `dot-${g}`)
+          .attr("cx", d => x0(d.phase) + x0.bandwidth() / 2)
+          .attr("cy", height)
+          .attr("r", 0)
+          .attr("fill", g === "Winner" ? "var(--win)" : "var(--lose)")
+          .attr("stroke", "#fff")
+          .attr("stroke-width", 1.2)
+          .on("mouseover", (event, d) => {
+            tooltip.style("opacity", 1)
+              .html(`<strong>${d.group}</strong><br/>Phase: ${d.phase}<br/>Run Rate: ${d.runRate.toFixed(2)}<br/>Avg Runs: ${d.avgRuns.toFixed(2)}`);
+          })
+          .on("mousemove", (event) => {
+            tooltip.style("left", (event.pageX + 12) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseleave", () => tooltip.style("opacity", 0));
+
+        anime({
+          targets: dots.nodes(),
+          duration: 1000,
+          delay: anime.stagger(150, { start: 400 }),
+          easing: "easeOutBack",
+          update: anim => {
+            dots.nodes().forEach((node, i) => {
+              const d = groupData[i];
+              const progress = anim.progress / 100;
+              const yTarget = yRight(d.runRate);
+              const currentY = height - (height - yTarget) * progress;
+              const currentR = 4 * progress;
+              node.setAttribute("cy", currentY);
+              node.setAttribute("r", currentR);
+            });
+          }
+        });
+      });
+
+      // Title
+      phaseSvg.append("text")
+        .attr("x", phaseWidth / 2)
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .style("font-weight", "700")
+        .style("font-size", "14px")
+        .style("fill", "#475569")
+        .text(`Phase-wise Avg Runs & Run Rate (${venue})`);
+
+      // Legend
+      const legend = phaseSvg.append("g")
+        .attr("transform", `translate(${phaseWidth / 2 - 60}, ${phaseHeight + 10})`);
+
+      const legendData = [
+        { label: "Winner", color: "var(--win)" },
+        { label: "Loser", color: "var(--lose)" }
+      ];
+
+      legend.selectAll("rect")
+        .data(legendData)
+        .join("rect")
+        .attr("x", (d, i) => i * 100)
+        .attr("width", 12)
+        .attr("height", 12)
+        .attr("rx", 3)
+        .attr("fill", d => d.color);
+
+      legend.selectAll("text")
+        .data(legendData)
+        .join("text")
+        .attr("x", (d, i) => i * 100 + 18)
+        .attr("y", 10)
+        .style("font-size", "12px")
+        .style("font-weight", "600")
+        .style("fill", "#475569")
+        .text(d => d.label);
+    }
+
+    //********LINE CHART FOR PAR SCORE*******
+
+    /**
+    Updates the line chart to show how the average par score has 
+    changed over the years for the selected venue.
+    
+     */
+    function updateLine(data, venue) {
+      const svg = d3.select("#linechart");
+      svg.selectAll("*").remove();
+
+      const margin = { top: 40, right: 30, bottom: 50, left: 60 };
+      const width = svg.node().getBoundingClientRect().width - margin.left - margin.right;
+      const height = 280 - margin.top - margin.bottom;
+      const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const filteredData = allMatches.filter(m => {
+        const info = m.data.info;
+        if (!info) return false;
+        const venueMatch = !selectedVenue || info.venue === selectedVenue;
+        const teamMatch = !currentFilters.team ||
+          (m.data.innings?.some(i => i.team === currentFilters.team));
+        return venueMatch && teamMatch;
+      });
+
+      const yearly = d3.rollups(
+        filteredData,
+        v => ({
+          parScore: d3.mean(v, m => {
+            const firstInnings = m.data.innings?.[0];
+            if (!firstInnings) return 0;
+            return d3.sum(firstInnings.overs || [], o =>
+              d3.sum(o.deliveries || [], d => d.runs?.total || 0)
+            );
+          })
+        }),
+        m => m.data.info.dates?.[0].slice(0, 4)
+      ).map(([year, stats]) => ({ year: +year, parScore: stats.parScore }))
+        .sort((a, b) => a.year - b.year);
+
+      if (!yearly.length) {
+        svg.append("text")
+          .attr("x", width / 2)
+          .attr("y", 140)
+          .attr("text-anchor", "middle")
+          .text("No data available for selected filters")
+          .style("fill", "#475569")
+          .style("font-weight", "600");
+        return;
+      }
+
+      const x = d3.scaleLinear().domain(d3.extent(yearly, d => d.year)).range([0, width]);
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(yearly, d => d.parScore)]).nice()
+        .range([height, 0]);
+
+      const line = d3.line()
+        .x(d => x(d.year))
+        .y(d => y(d.parScore))
+        .curve(d3.curveMonotoneX);
+
+      g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x).tickFormat(d3.format("d")))
+        .selectAll("text").style("font-size", "11px");
+
+      g.append("g")
+        .call(d3.axisLeft(y))
+        .selectAll("text").style("font-size", "11px");
+
+      // Line path
+      const path = g.append("path")
+        .datum(yearly)
+        .attr("fill", "none")
+        .attr("stroke", "var(--accent)")
+        .attr("stroke-width", 2.5)
+        .attr("d", line);
+
+      const pathLength = path.node().getTotalLength();
+      path.attr("stroke-dasharray", pathLength)
+        .attr("stroke-dashoffset", pathLength);
+      anime({
+        targets: path.node(),
+        strokeDashoffset: [pathLength, 0],
+        easing: "easeOutSine",
+        duration: 1200
+      });
+
+      const selectedYear = currentFilters.year ? +currentFilters.year : null;
+
+      // Dots 
+      const dots = g.selectAll(".dot")
+        .data(yearly)
+        .join("circle")
+        .attr("class", "dot")
+        .attr("cx", d => x(d.year))
+        .attr("cy", height)
+        .attr("r", 0)
+        .attr("fill", d =>
+          selectedYear && d.year === selectedYear ? "var(--win)" : "var(--accent)"
+        )
+        .attr("stroke", d => (selectedYear && d.year === selectedYear ? "#fff" : "none"))
+        .attr("stroke-width", d => (selectedYear && d.year === selectedYear ? 2 : 0))
+        .style("opacity", d => (selectedYear && d.year !== selectedYear ? 0.4 : 1))
+        .on("mouseover", (e, d) => {
+          tooltip.transition().duration(150).style("opacity", 1);
+          tooltip.html(`<b>${d.year}</b><br>Avg Par Score: ${d.parScore.toFixed(1)}`)
+            .style("left", e.pageX + 15 + "px")
+            .style("top", e.pageY - 20 + "px");
+        })
+        .on("mouseout", () => tooltip.transition().duration(200).style("opacity", 0));
+
+      anime({
+        targets: dots.nodes(),
+        duration: 1000,
+        delay: anime.stagger(100),
+        easing: "easeOutBack",
+        update: anim => {
+          dots.nodes().forEach((node, i) => {
+            const d = yearly[i];
+            const progress = anim.progress / 100;
+            const yTarget = y(d.parScore);
+            const currentY = height - (height - yTarget) * progress;
+            const currentR = 5 * progress;
+            node.setAttribute("cy", currentY);
+            node.setAttribute("r", currentR);
+          });
+        }
+      });
+
+      // Labels
+      const labels = g.selectAll(".dot-label")
+        .data(yearly)
+        .join("text")
+        .attr("class", "dot-label")
+        .attr("x", d => x(d.year))
+        .attr("y", height)
+        .attr("text-anchor", "middle")
+        .style("font-size", "11px")
+        .style("font-weight", "600")
+        .style("fill", d =>
+          selectedYear && d.year === selectedYear ? "var(--win)" : "#475569"
+        )
+        .style("opacity", 0)
+        .text(d => d.parScore ? d.parScore.toFixed(0) : "");
+
+      anime({
+        targets: labels.nodes(),
+        duration: 800,
+        delay: anime.stagger(120, { start: 200 }),
+        easing: "easeOutQuad",
+        update: anim => {
+          labels.nodes().forEach((node, i) => {
+            const d = yearly[i];
+            const progress = anim.progress / 100;
+            const yTarget = y(d.parScore) - 10;
+            const currentY = height - (height - yTarget) * progress;
+            node.setAttribute("y", currentY);
+            node.style.opacity = progress;
+          });
+        }
+      });
+
+      // Title
+      svg.append("text")
+        .attr("x", svg.node().getBoundingClientRect().width / 2)
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .style("font-weight", "700")
+        .style("font-size", "14px")
+        .style("fill", "#475569")
+        .text(`Average Par Score Over Years (${venue})`);
+    }
+
+    //***STADIUM DATA CARD******
+
+
+    //Updates stadium details card with selected venue information
+
+    function updateStadiumCard(d) {
+      const venueName = d["name of stadium"];
+      const stats = venueStats[venueName] || { batFirst: 0, batSecond: 0, total: 0 };
+      const total = stats.total;
+      const bat1 = stats.batFirst || 0;
+      const bat2 = stats.batSecond || 0;
+      const dominantWins = Math.max(bat1, bat2);
+      const dominantSide = bat1 > bat2 ? "Bat First" : "Bat Second";
+      const pct = total > 0 ? ((dominantWins / total) * 100).toFixed(1) : "0.0";
+
+      const card = document.getElementById("stadiumCard");
+      const nameEl = document.getElementById("stadiumName");
+      const stateEl = document.getElementById("stadiumState");
+      const totalEl = document.getElementById("totalMatches");
+      const bat1El = document.getElementById("batFirstWins");
+      const bat2El = document.getElementById("batSecondWins");
+      const pctEl = document.getElementById("winningPercentage");
+
+
+      anime({
+        targets: card,
+        opacity: [1, 0],
+        scale: [1, 0.96],
+        easing: "easeInOutQuad",
+        duration: 200,
+        complete: () => {
+          nameEl.textContent = venueName || "-";
+          stateEl.textContent = d.state || "-";
+          pctEl.textContent = `${pct}% (${dominantSide})`;
+          const animateNumber = (el, start, end) => {
+            anime({
+              targets: el,
+              innerHTML: [start, end],
+              round: 1,
+              duration: 700,
+              easing: "easeOutCubic",
+              update: (anim) => {
+                el.textContent = Math.round(anim.animations[0].currentValue);
+              }
+            });
+          };
+
+          animateNumber(totalEl, +totalEl.textContent || 0, total);
+          animateNumber(bat1El, +bat1El.textContent || 0, bat1);
+          animateNumber(bat2El, +bat2El.textContent || 0, bat2);
+
+
+          anime({
+            targets: card,
+            opacity: [0, 1],
+            scale: [0.96, 1],
+            easing: "easeOutBack",
+            duration: 400
+          });
+          anime({
+            targets: card,
+            boxShadow: [
+              "0 0 0px rgba(34,197,94,0)",
+              "0 0 20px rgba(34,197,94,0.4)",
+              "0 0 0px rgba(34,197,94,0)"
+            ],
+            duration: 800,
+            easing: "easeOutQuad"
+          });
+        }
+      });
+    }
+  </script>
+
+
+
+</body>
+
+</html>
